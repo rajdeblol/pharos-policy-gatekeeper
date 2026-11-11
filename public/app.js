@@ -1,4 +1,4 @@
-import { evaluateAction, runGuarded, policy } from '/policy.mjs';
+import { evaluateAction, runGuarded, policy } from './policy.mjs';
 
 const $ = id => document.getElementById(id);
 const form = $('request-form'), amountInput = $('amount'), destinationInput = $('destination');

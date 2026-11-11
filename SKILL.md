@@ -9,7 +9,7 @@ Use this skill as a preflight for any action that could move value or change on-
 
 ## Policy
 
-The policy is in `policy.mjs`:
+The policy is implemented in `public/policy.mjs` and re-exported from the repo root `policy.mjs`:
 
 - Maximum 250 USD per action.
 - Only the two explicitly listed destination addresses.

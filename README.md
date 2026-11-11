@@ -14,13 +14,14 @@ Open `http://localhost:4174`. There are four scenarios: one allow and one deny f
 
 ## Policy choices
 
-`policy.mjs` is the source of truth: per-action limit of 250 USD, two destination addresses, and 09:00–17:00 UTC on weekdays. `evaluateAction` is deterministic apart from the supplied/current time. Callers that need execution should use `runGuarded(action, executor, config)` so denied requests do not reach the executor.
+`public/policy.mjs` is the source of truth: per-action limit of 250 USD, two destination addresses, and 09:00–17:00 UTC on weekdays. The repo-root `policy.mjs` re-exports the same module. `evaluateAction` is deterministic apart from the supplied/current time. Callers that need execution should use `runGuarded(action, executor, config)` so denied requests do not reach the executor.
 
 The ledger is stored in the current browser's local storage, with a clear control. Example rows are seeded on first open so all three deny paths and the allow path are immediately reviewable. No private key, wallet, or RPC is used.
 
 ## Files
 
-- `policy.mjs` — policy evaluator and guarded executor.
+- `public/policy.mjs` — policy evaluator and guarded executor, included in the deployed static output.
+- `policy.mjs` — root re-export for Node consumers.
 - `public/` — working demo and decision ledger.
 - `server.mjs` — static Node server suitable for local use or a Node host.
 
