@@ -13,19 +13,38 @@ const validTime = value => /^([01]\d|2[0-3]):[0-5]\d$/.test(value);
 
 export function evaluateAction(action, config = policy) {
   const amount = Number(action.amount);
-  if (!Number.isFinite(amount) || amount <= 0) return { decision: 'deny', rule: 'valid amount', reason: 'Amount must be a positive number.' };
-  if (amount > config.spendLimit) return { decision: 'deny', rule: 'spend limit', reason: `${amount} ${action.asset || 'USD'} exceeds the ${config.spendLimit} ${action.asset || 'USD'} per-action cap.` };
-  if (!config.allowedDestinations.map(normalized).includes(normalized(action.destination))) return { decision: 'deny', rule: 'destination allowlist', reason: 'Destination is not on the approved address list.' };
+  const asset = action.asset || 'USD';
+  const amountValid = Number.isFinite(amount) && amount > 0;
+  const underLimit = amountValid && amount <= config.spendLimit;
+  const destinationAllowed = config.allowedDestinations.map(normalized).includes(normalized(action.destination));
   const { start, end, timezone, weekdaysOnly } = config.window;
-  if (!validTime(start) || !validTime(end) || !timezone) return { decision: 'deny', rule: 'policy configuration', reason: 'Time window configuration is invalid.' };
-  const date = new Date(action.at || Date.now());
-  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
-  const part = key => parts.find(item => item.type === key)?.value;
-  const now = `${part('hour')}:${part('minute')}`;
-  const weekday = part('weekday');
-  const withinHours = start <= end ? now >= start && now < end : now >= start || now < end;
-  if (!withinHours || (weekdaysOnly && ['Sat', 'Sun'].includes(weekday))) return { decision: 'deny', rule: 'time window', reason: `Outside the ${start}–${end} ${timezone}${weekdaysOnly ? ' weekday' : ''} window.` };
-  return { decision: 'allow', rule: 'all checks passed', reason: `Within cap, destination is approved, and request is inside the ${start}–${end} ${timezone} window.` };
+  let timeAllowed = false;
+  let timeReason;
+  const configValid = validTime(start) && validTime(end) && Boolean(timezone);
+  if (configValid) {
+    try {
+      const date = new Date(action.at || Date.now());
+      const parts = new Intl.DateTimeFormat('en-GB', { timeZone: timezone, weekday: 'short', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(date);
+      const part = key => parts.find(item => item.type === key)?.value;
+      const now = `${part('hour')}:${part('minute')}`;
+      const weekday = part('weekday');
+      const withinHours = start <= end ? now >= start && now < end : now >= start || now < end;
+      timeAllowed = withinHours && !(weekdaysOnly && ['Sat', 'Sun'].includes(weekday));
+      timeReason = timeAllowed ? `Inside ${start}–${end} ${timezone}.` : `Outside ${start}–${end} ${timezone}${weekdaysOnly ? ' weekday' : ''} window.`;
+    } catch {
+      timeReason = 'Time zone is not recognized.';
+    }
+  } else timeReason = 'Time-window policy configuration is invalid.';
+
+  const checks = [
+    { rule: 'spend limit', label: 'Spend cap', passed: underLimit, reason: !amountValid ? 'Amount must be positive.' : underLimit ? `Within ${config.spendLimit} ${asset} cap.` : `${amount} ${asset} exceeds the ${config.spendLimit} ${asset} cap.` },
+    { rule: 'destination allowlist', label: 'Allowlist', passed: destinationAllowed, reason: destinationAllowed ? 'Destination is approved.' : 'Destination is not on the approved address list.' },
+    { rule: 'time window', label: 'Time window', passed: timeAllowed, reason: timeReason }
+  ];
+  const failed = checks.find(check => !check.passed);
+  return failed
+    ? { decision: 'deny', rule: failed.rule, reason: failed.reason, checks }
+    : { decision: 'allow', rule: 'all checks passed', reason: 'Amount, destination, and time window all passed.', checks };
 }
 
 /** Gate an executor so denied requests cannot reach it. */
